@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freely Rotating CMY Wireframe Cube</title>
+    <style>
+        @font-face {
+            font-family: 'Atkinson-iMonolegible';
+            src: url(AtkinsonMonolegible.ttf);
+        }
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: white;
+            word-spacing: 0rem;
+        }
+        h1 {
+            font-size: 4rem;
+            margin-bottom: 0rem;
+            margin-top: 0rem;
+        }
+        h2 {
+            font-size: 2rem;
+            margin-top: 0rem;
+            margin-left: 0.25rem;
+        }
+        descriptor {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 1.5rem;        }
+    </style>
+</head>
+<body>
+    <canvas id="cubeCanvas" width="400" height="400"></canvas>
+    <div class="descriptor">
+        <h1>The Cube</h1>
+        <h2>Made by Minh Truong</h2>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('cubeCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const cubeSize = 200;
+        let rotationX = 0;
+        let rotationY = 0;
+        let rotationZ = 0;
+
+        const rotationSpeed = 1;
+        let lastTime = 0;
+
+        const vertices = [
+            [-1, -1, -1], [1, -1, -1], [1, 1, -1], [-1, 1, -1],
+            [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]
+        ].map(v => v.map(coord => coord * cubeSize / 2));
+
+        const faces = [
+            [0, 1, 2, 3], // Front (Cyan)
+            [5, 4, 7, 6], // Back (Cyan)
+            [1, 5, 6, 2], // Right (Magenta)
+            [4, 0, 3, 7], // Left (Magenta)
+            [3, 2, 6, 7], // Top (Yellow)
+            [4, 5, 1, 0]  // Bottom (Yellow)
+        ];
+
+        const edges = [
+            [0, 1], [1, 2], [2, 3], [3, 0], // Front face
+            [4, 5], [5, 6], [6, 7], [7, 4], // Back face
+            [0, 4], [1, 5], [2, 6], [3, 7]  // Connecting edges
+        ];
+
+        const colors = [
+            [0, 255, 255],   // Cyan
+            [0, 255, 255],   // Cyan
+            [255, 0, 255],   // Magenta
+            [255, 0, 255],   // Magenta
+            [255, 255, 0],   // Yellow
+            [255, 255, 0]    // Yellow
+        ];
+
+        function rotatePoint(point, rotX, rotY, rotZ) {
+            let x = point[0], y = point[1], z = point[2];
+            
+            // Rotate around X-axis
+            let temp = y;
+            y = y * Math.cos(rotX) - z * Math.sin(rotX);
+            z = temp * Math.sin(rotX) + z * Math.cos(rotX);
+            
+            // Rotate around Y-axis
+            temp = x;
+            x = x * Math.cos(rotY) + z * Math.sin(rotY);
+            z = -temp * Math.sin(rotY) + z * Math.cos(rotY);
+            
+            // Rotate around Z-axis
+            temp = x;
+            x = x * Math.cos(rotZ) - y * Math.sin(rotZ);
+            y = temp * Math.sin(rotZ) + y * Math.cos(rotZ);
+            
+            return [x, y, z];
+        }
+
+        function project(point) {
+            // Orthographic projection, centered based on cube size
+            return [
+                point[0] + cubeSize / 2,
+                point[1] + cubeSize / 2
+            ];
+        }
+
+        function drawCube(currentTime) {
+            const deltaTime = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+
+            rotationX += rotationSpeed * deltaTime;
+            rotationY += rotationSpeed * 0.7 * deltaTime;
+            rotationZ += rotationSpeed * 0.5 * deltaTime;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const rotatedVertices = vertices.map(v => rotatePoint(v, rotationX, rotationY, rotationZ));
+            const projectedVertices = rotatedVertices.map(project);
+
+            // Calculate offset to center the cube in the canvas
+            const offsetX = (canvas.width - cubeSize) / 2;
+            const offsetY = (canvas.height - cubeSize) / 2;
+
+            // Sort faces by depth (painter's algorithm)
+            const sortedFaces = faces.map((face, index) => ({
+                index,
+                z: Math.max(...face.map(v => rotatedVertices[v][2]))
+            })).sort((a, b) => a.z - b.z);
+
+            // Draw faces on the main canvas
+            for (const { index } of sortedFaces) {
+                const face = faces[index];
+                const [r, g, b] = colors[index];
+
+                ctx.beginPath();
+                ctx.moveTo(projectedVertices[face[0]][0] + offsetX, projectedVertices[face[0]][1] + offsetY);
+                for (let i = 1; i < face.length; i++) {
+                    ctx.lineTo(projectedVertices[face[i]][0] + offsetX, projectedVertices[face[i]][1] + offsetY);
+                }
+                ctx.closePath();
+
+                ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.4)`;
+                ctx.fill();
+            }
+
+            // Draw edges
+            ctx.beginPath();
+            ctx.strokeStyle = 'black';
+            ctx.lineWidth = 2;
+
+            for (let edge of edges) {
+                const p1 = projectedVertices[edge[0]];
+                const p2 = projectedVertices[edge[1]];
+                ctx.moveTo(Math.round(p1[0] + offsetX), Math.round(p1[1] + offsetY));
+                ctx.lineTo(Math.round(p2[0] + offsetX), Math.round(p2[1] + offsetY));
+            }
+
+            ctx.stroke();
+            requestAnimationFrame(drawCube);
+        }
+
+        requestAnimationFrame(drawCube);
+    </script>
+</body>
+</html>
